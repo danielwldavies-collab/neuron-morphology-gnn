@@ -25,22 +25,38 @@ after the node cap (189 pyramidal, 157 interneuron).
 |---|---|---|---|---|---|---|
 | Accuracy | 0.971 | 0.986 | 0.957 | 0.957 | 0.971 | **0.968 ± 0.011** |
 
-> ⚠️ **Treat this number as optimistic.** In that run, each fold reported the *best test accuracy over all
-> 60 epochs*, so the test fold was also used to choose the epoch, and features were normalised using all
-> neurons including the test fold. The current code fixes both (see Evaluation above).
-> Re-running with `python -m neuron_gnn cv` gives the unbiased estimate; that result has not been recorded here yet.
+> ⚠️ **That number is optimistic.** In that run each fold reported the *best test accuracy over all
+> 60 epochs*, so the test fold also chose the epoch, and features were normalised using all neurons
+> including the test fold. Both are fixed in the current code; corrected results are below.
 
-## Known confounds (worth testing, not yet tested)
+**Corrected evaluation with confound controls (Google Colab, 11 November 2026):** 340 graphs
+(183 pyramidal, 157 interneuron) from 49 NeuroMorpho archives; 5-fold CV, mean ± SD across folds.
 
-1. **SWC structure type may leak the label.** SWC type 4 marks *apical dendrite*, a defining feature of
-   pyramidal cells, so the model could learn "has type-4 nodes" rather than shape. Ablation:
-   `--drop-features swc_type`.
-2. **Lab / archive effects.** Pyramidal cells and interneurons may come from different labs with different
-   reconstruction protocols, so the model could be classifying the lab. Control:
-   `--group-by-archive` keeps every archive inside one fold.
-3. **Selection by metadata label.** Labels are NeuroMorpho's `cell_type` strings, not independently verified.
+| Run | Command flags | Accuracy | Balanced accuracy |
+|---|---|---|---|
+| Corrected baseline | *(none)* | 0.929 ± 0.045 | 0.928 ± 0.046 |
+| SWC structure type removed | `--drop-features swc_type` | 0.912 ± 0.025 | 0.913 ± 0.024 |
+| Archives (labs) kept within one fold | `--group-by-archive` | 0.854 ± 0.113 | 0.828 ± 0.139 |
+| Both controls | `--drop-features swc_type --group-by-archive` | 0.739 ± 0.212 | 0.785 ± 0.145 |
 
-If accuracy stays high with both controls on, that is much stronger evidence that morphology carries the class signal.
+### Interpretation
+
+- **Lab identity is the main confound.** Testing on labs the model never saw drops balanced accuracy from
+  0.93 to 0.83, and fold-to-fold spread triples. Within the same labs, part of what the model learns is
+  probably each lab's reconstruction style rather than cell type.
+- **The apical-dendrite label helps mainly on unseen labs.** Removing SWC type barely matters when labs are
+  shared across folds (0.913 vs 0.928), but costs a further ~0.04 balanced accuracy on unseen labs.
+- **The fairest estimate of "shape alone, new lab" is ≈ 0.79 balanced accuracy**, clearly above chance
+  (0.5) but with wide uncertainty.
+- **Caveat:** most archives contribute only one cell type, so some lab-grouped test folds contain a
+  single class; per-fold numbers there are noisy, and balanced accuracy is the better summary.
+
+## Remaining limitations
+
+1. **Labs and classes are entangled.** A cleaner test needs archives that reconstructed both cell types.
+2. **Labels come from metadata.** Classes are NeuroMorpho's `cell_type` strings, not independently verified.
+3. **Small sample.** 340 neurons and 5 folds give wide confidence intervals; repeated CV with several seeds
+   would tighten the estimates.
 
 ## Usage
 
